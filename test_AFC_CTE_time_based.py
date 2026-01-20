@@ -9,6 +9,7 @@ Requirements:
 
 from .__main__ import *
 import time
+import os
 
 SKIP_TEST = False
 
@@ -19,14 +20,23 @@ if not SKIP_TEST:
     _FILENAME = "afc_cte_3646_MP1.1.7.4.0_400kW_coolent30_25t.csv"
     LOG_FILE = "cte_test_log_1.txt"
 
+    """
+    Write logs to a file for later debugging.
+    """
     def write_to_log(data):
         module_path = abspath(__file__)
         _OUTPUT = "test_data/time_based_data/output_data"
         dir_path = join(dirname(module_path), _OUTPUT)
         log_file = join(dir_path, f"processed_CTE_{LOG_FILE}")
+        if os.path.exists(log_file):
+            os.remove(log_file)
         with open(log_file, 'a') as file:
             file.write(data)
             file.write("\n")
+
+    """
+    Parse data from csv file and populate Input structure
+    """
     def parse_AFC_HMC_Data():
         module_path = abspath(__file__)
         dir_path = join(dirname(module_path), _SUBDIR_NAME)
@@ -36,7 +46,6 @@ if not SKIP_TEST:
 
         # Open the CSV file
         # Iterate over each row in the CSV
-        i=0
         for row in iter_file(csv_path):
             # Get inputs
             test_filename = 'AFC_CTE_Behavioural_Test.csv'
@@ -114,14 +123,17 @@ if not SKIP_TEST:
                 },
                 "Expected": {},
             }
-
             test_cases.append(test_case)
-            i+=1
-            #if i == 250:
-            #    break
         return test_cases
 
 
+    """
+    Test case: time based test
+    Read csv file, get parsed data in Input structure.
+    Call AFC for each line from Input structure, populate AFC_CTE info structure.
+    After each AFC call, call CTE for 10 times (each 100 ms)
+    Receive CTE estimates and validate.
+    """
     def test_hmc_afc_cte_behavioural(lib, setup_parameters):
         all_time_steps = parse_AFC_HMC_Data()
 
@@ -186,28 +198,6 @@ if not SKIP_TEST:
         expected_result = True
         actual_result = True
         charging_started = False
-
-        # for measuring deviation
-        deviation_80 = 0
-        deviation_100 = 0
-        deviation_350_80 = 0
-        deviation_350_100 = 0
-        deviation_50_80 = 0
-        deviation_50_100 = 0
-        deviation_10_9_80 = 0
-        deviation_10_9_100 = 0
-        deviation_10_80 = 0
-        deviation_10_100 = 0
-        deviation_2_45_80 = 0
-        deviation_2_45_100 = 0
-        deviation_3_2_80 = 0
-        deviation_3_2_100 = 0
-        deviation_2_88_80 = 0
-        deviation_2_88_100 = 0
-        deviation_2_64_80 = 0
-        deviation_2_64_100 = 0
-        deviation_2_76_80 = 0
-        deviation_2_76_100 = 0
 
         # For current charger
         soc_start_time_80 = 0
@@ -279,8 +269,7 @@ if not SKIP_TEST:
         charging_2_76_80_completed = False
         charging_2_76_100_completed = False
 
-
-        # previous CTE satimates
+        # previous CTE estimates (for comparing with current estimate)
         previous_charger_350_kw_time_end_soc = 0
         previous_charger_350_kw_time_80 = 0
         previous_charger_50_kw_time_end_soc = 0
@@ -304,10 +293,7 @@ if not SKIP_TEST:
 
         test_i = 0
         for each_time_step in all_time_steps:
-            #logger.info(each_time_step)
-            # Setup Variables
-            # ------------------------------------------------
-
+            # Initialize lib values before AFC call.
             test_filename = each_time_step["Inputs"]["filename"]
             input_time = each_time_step["Inputs"]["Time"]
             lib.VeAPI_I_PackCurr = each_time_step["Inputs"]["PackCurr"]
@@ -329,6 +315,7 @@ if not SKIP_TEST:
 
             # Run Function
             # ------------------------------------------------
+            # Use when tuning is enabled.
             '''
             lib.VeAPI_e_TuningState = 1
             lib.VeAPI_e_Ab = 1.2
@@ -342,6 +329,7 @@ if not SKIP_TEST:
                 ffi.addressof(lib, "AFC_Inputs"), ffi.addressof(lib, "AFC_Outputs")
             )
             '''
+            # Call AFC and populate VaAFC_Cmp_CTE_Info
             lib.Qnovo_AFC_1000ms(
                 lib.VaAPI_Cmp_NVMRegion,
                 lib.VeAPI_I_PackCurr,
@@ -366,6 +354,7 @@ if not SKIP_TEST:
                 ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
                 ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag")
             )
+            # Call CTE each 100 ms (AFC is called every 1s and CTE is called every 100ms)
             for i in range(10):
                 lib.qnovo_cte(lib.VeAPI_Pct_PackSOC, each_time_step["Inputs"]["EndSOC"], lib.VeAPI_T_MinTempSnsr,
                               lib.VeAPI_T_MaxTempSnsr, each_time_step["Inputs"]["CTE_Amb"],
@@ -438,6 +427,7 @@ if not SKIP_TEST:
             results["charger_2_76_kw.time_end_soc"].append(lib.cte_estimates.charger_2_76_kw.time_end_soc)
             results["charger_2_76_kw.time_80"].append(lib.cte_estimates.charger_2_76_kw.time_80)
 
+            # Store previous cte estimates for first time CTE call.
             if cte_first_execution:
                 write_to_log(f"CTE First execution, charging started : {charging_started}, battery_state : {battery_state}")
                 cte_first_execution = False
@@ -462,6 +452,7 @@ if not SKIP_TEST:
                 previous_charger_time_end_soc = 0
                 previous_charger_time_80 = 0
             else:
+                # Second CTE call onwards , compare CTE estimates
                 if previous_charger_time_80 > 0:
                     if lib.cte_estimates.charging.time_end_soc > previous_charger_time_end_soc:
                         write_to_log(f"Current CTE estimate is greater than previous estimate, check output file "
@@ -582,6 +573,7 @@ if not SKIP_TEST:
                                      f"current est : {lib.cte_estimates.charger_2_76_kw.time_80},"
                                      f"previous est: {previous_charger_2_76_kw_time_80}")
 
+                    # Store current value as previous value
                     previous_charger_time_end_soc = lib.cte_estimates.charging.time_end_soc
                     previous_charger_time_80 = lib.cte_estimates.charging.time_80
                     previous_charger_350_kw_time_end_soc = lib.cte_estimates.charger_350_kw.time_end_soc
@@ -603,10 +595,10 @@ if not SKIP_TEST:
                     previous_charger_2_76_kw_time_end_soc = lib.cte_estimates.charger_2_76_kw.time_end_soc
                     previous_charger_2_76_kw_time_80 = lib.cte_estimates.charger_2_76_kw.time_80
 
-
             # Charging started (Charging state was unplugged)
             if battery_state == 1 and charging_started is False:
                 write_to_log(f"Charging started: input time : {input_time}")
+                # Store input time from csv data as charging start time
                 soc_start_time_80 = input_time
                 soc_start_time_100 = input_time
                 soc_start_time_350_80 = input_time
@@ -627,27 +619,6 @@ if not SKIP_TEST:
                 soc_start_time_2_64_100 = input_time
                 soc_start_time_2_76_80 = input_time
                 soc_start_time_2_76_100 = input_time
-
-                previous_charger_time_end_soc = lib.cte_estimates.charging.time_end_soc
-                previous_charger_time_80 = lib.cte_estimates.charging.time_80
-                previous_charger_350_kw_time_end_soc = lib.cte_estimates.charger_350_kw.time_end_soc
-                previous_charger_350_kw_time_80 = lib.cte_estimates.charger_350_kw.time_80
-                previous_charger_50_kw_time_end_soc = lib.cte_estimates.charger_50_kw.time_end_soc
-                previous_charger_50_kw_time_80 = lib.cte_estimates.charger_50_kw.time_80
-                previous_charger_10_9_kw_time_end_soc = lib.cte_estimates.charger_10_9_kw.time_end_soc
-                previous_charger_10_9_kw_time_80 = lib.cte_estimates.charger_10_9_kw.time_80
-                previous_charger_10_kw_time_end_soc = lib.cte_estimates.charger_10_kw.time_end_soc
-                previous_charger_10_kw_time_80 = lib.cte_estimates.charger_10_kw.time_80
-                previous_charger_2_45_kw_time_end_soc = lib.cte_estimates.charger_2_45_kw.time_end_soc
-                previous_charger_2_45_kw_time_80 = lib.cte_estimates.charger_2_45_kw.time_80
-                previous_charger_3_2_kw_time_end_soc = lib.cte_estimates.charger_3_2_kw.time_end_soc
-                previous_charger_3_2_kw_time_80 = lib.cte_estimates.charger_3_2_kw.time_80
-                previous_charger_2_88_kw_time_end_soc = lib.cte_estimates.charger_2_88_kw.time_end_soc
-                previous_charger_2_88_kw_time_80 = lib.cte_estimates.charger_2_88_kw.time_80
-                previous_charger_2_64_kw_time_end_soc = lib.cte_estimates.charger_2_64_kw.time_end_soc
-                previous_charger_2_64_kw_time_80 = lib.cte_estimates.charger_2_64_kw.time_80
-                previous_charger_2_76_kw_time_end_soc = lib.cte_estimates.charger_2_76_kw.time_end_soc
-                previous_charger_2_76_kw_time_80 = lib.cte_estimates.charger_2_76_kw.time_80
 
                 expected_charge_time_80 = lib.cte_estimates.charging.time_80
                 expected_charge_time_350_80 = lib.cte_estimates.charger_350_kw.time_80
@@ -672,7 +643,6 @@ if not SKIP_TEST:
                 write_to_log(f"Expected expected_charge_time_80 : {expected_charge_time_80}")
                 write_to_log(f"Expected expected_charge_time_350_80 : {expected_charge_time_350_80}")
                 charging_started = True
-
 
             # Charging started and 80% charging completed now. Current Charger
             if battery_state == 1 and lib.cte_estimates.charging.time_80 == 0 and charging_80_completed is False:
@@ -826,7 +796,6 @@ if not SKIP_TEST:
                     write_to_log(f"Deviation in estimate for charger_2_76_kw 80% capacity 2_76_80: {deviation_2_76_80}")
                     if deviation_2_76_80 > ACCEPTED_CHARGE_TIME_DEVIATION_PERCENTAGE:
                         write_to_log(f"Deviation in estimate for 80% for 2_76kw capacity is above KPI: {deviation_2_76_80}")
-
 
             # Charging started and 100% charging completed now. Current Charger.
             if battery_state == 1 and lib.cte_estimates.charging.time_end_soc == 0 and charging_100_completed is False:
@@ -992,7 +961,6 @@ if not SKIP_TEST:
                         write_to_log(
                             f"Deviation in estimate for 80% capacity for 2_76kw is above KPI: {deviation_2_76_100}")
 
-
             # charging is done and now next charge cycle.
             if battery_state == 0 and charging_started is True:
                 write_to_log("Resetting after a cycle")
@@ -1002,49 +970,42 @@ if not SKIP_TEST:
                 expected_charge_time_80 = 0
                 charging_80_completed = False
                 charging_100_completed = False
-                deviation_80 = 0
 
                 soc_start_time_350_80 = 0
                 soc_start_time_350_100 = 0
                 expected_charge_time_350_80 = 0
                 charging_350_80_completed = False
                 charging_350_100_completed = False
-                deviation_350_80 = 0
 
                 soc_start_time_50_80 = 0
                 soc_start_time_50_100 = 0
                 expected_charge_time_50_80 = 0
                 charging_50_80_completed = False
                 charging_50_100_completed = False
-                deviation_50_80 = 0
 
                 soc_start_time_10_9_80 = 0
                 soc_start_time_10_9_100 = 0
                 expected_charge_time_10_9_80 = 0
                 charging_10_9_80_completed = False
                 charging_10_9_100_completed = False
-                deviation_10_9_80 = 0
 
                 soc_start_time_10_80 = 0
                 soc_start_time_10_100 = 0
                 expected_charge_time_10_80 = 0
                 charging_10_80_completed = False
                 charging_10_100_completed = False
-                deviation_10_80 = 0
 
                 soc_start_time_2_45_80 = 0
                 soc_start_time_2_45_100 = 0
                 expected_charge_time_2_45_80 = 0
                 charging_2_45_80_completed = False
                 charging_2_45_100_completed = False
-                deviation_2_45_80 = 0
 
                 soc_start_time_3_2_80 = 0
                 soc_start_time_3_2_100 = 0
                 expected_charge_time_3_2_80 = 0
                 charging_3_2_80_completed = False
                 charging_3_2_100_completed = False
-                deviation_3_2_80 = 0
 
                 soc_start_time_2_88_80 = 0
                 soc_start_time_2_88_100 = 0
@@ -1058,14 +1019,13 @@ if not SKIP_TEST:
                 expected_charge_time_2_64_80 = 0
                 charging_2_64_80_completed = False
                 charging_2_64_100_completed = False
-                deviation_2_64_80 = 0
 
                 soc_start_time_2_76_80 = 0
                 soc_start_time_2_76_100 = 0
                 expected_charge_time_2_76_80 = 0
                 charging_2_76_80_completed = False
                 charging_2_76_100_completed = False
-                deviation_2_76_80 = 0
+                cte_first_execution = True
 
         '''
         try:
