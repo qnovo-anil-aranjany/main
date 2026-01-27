@@ -1,0 +1,339 @@
+"""Test Module Description:
+    Test module for HIghTempDerate
+
+Requirements:
+    - [JIRA ticket or requirement reference]
+    - Python version >= 3.12.4
+    - Pytest version >= 8.0.1
+"""
+import math
+from typing import Any
+
+from python_calamine import CalamineWorkbook
+
+from .__main__ import *
+
+# for time based tests
+_MODULE_PATH = abspath(__file__)
+
+ffi = cffi.FFI()
+SKIP_TEST = False
+MAKE_HTML = True
+
+_MAX_CURRENT = 331600
+
+def iter_excel_calamine(file_path, sheet_name=None):
+    print(f"iter_excel_calamine {file_path}")
+    workbook = CalamineWorkbook.from_path(file_path)
+
+    # Get sheet by name if provided, otherwise use first sheet
+    if sheet_name:
+        rows = iter(workbook.get_sheet_by_name(sheet_name).to_python())
+    else:
+        rows = iter(workbook.get_sheet_by_index(0).to_python())
+
+    headers = list(map(str, next(rows)))
+    for row in rows:
+        yield dict(zip(headers, row))
+    workbook.close()
+
+
+if not SKIP_TEST:
+    _FILENAME = "high_temp_derate_data.xlsx"
+
+    def parse_AFC_high_temp_derate_data(sheet_name=None):
+        file_path = join(dirname(_MODULE_PATH), "test_data", _FILENAME)
+        print(file_path)
+        test_cases = []
+        soc = 0
+        # Pass sheet_name through to iter_excel_calamine
+        for row in iter_excel_calamine(file_path, sheet_name=sheet_name):
+            for key, value in row.items():
+                temp = float(key)
+                ratio = float(value)
+                if math.isclose(ratio, 1.0, abs_tol=1e-6):
+                    ratio = 1
+                output = ratio
+                test_case = {
+                    "Inputs": {
+                        "soc": soc,
+                        "temp": temp,
+                        "ratio": ratio,
+                        "output": output,
+                    },
+                    "Expected": {},
+                }
+                test_cases.append(test_case)
+            soc += 5
+        return test_cases
+
+
+    HTD0 = parse_AFC_high_temp_derate_data(sheet_name="HTD0")
+    HTD1 = parse_AFC_high_temp_derate_data(sheet_name="HTD1")
+    HTD2 = parse_AFC_high_temp_derate_data(sheet_name="HTD2")
+
+
+    @pytest.mark.parametrize("test_cases", HTD0)
+    def test_AFC_HighTemp_Derate_HTD0(lib: Any, setup_parameters, test_cases):
+        """
+        This test function performs verification of specific operating conditions relevant to the
+        'AFC_HiTemperatureDerate' function.
+        """
+        lib.VeAPI_T_MaxTempSnsr = 220
+
+        lib.fs_API_SetInputsAFC(
+            lib.VaAPI_Cmp_NVMRegion,
+            lib.VaAPI_Cmp_NVMLoggingRegion,
+            lib.VeAPI_I_PackCurr,
+            lib.VeAPI_b_PackCurr_DR,
+            lib.VaAPI_U_CellVolts,
+            lib.VaAPI_b_CellVolts_DR,
+            lib.VaAPI_T_TempSnsrs,
+            lib.VaAPI_b_TempSnsrs_DR,
+            lib.VeAPI_T_MinTempSnsr,
+            lib.VeAPI_b_MinTempSnsr_DR,
+            lib.VeAPI_T_MaxTempSnsr,
+            lib.VeAPI_b_MaxTempSnsr_DR,
+            lib.VeAPI_Cap_ChgPackCapcty,
+            lib.VeAPI_b_ChgPackCapcty_DR,
+            lib.VeAPI_Pct_PackSOC,
+            lib.VeAPI_b_PackSOC_DR,
+            lib.VeAPI_b_EVSEChgStatus,
+            ffi.addressof(lib, "VaAFC_Cmp_CTE_Info"),
+            ffi.addressof(lib, "VeAFC_e_ErrorFlags"),
+            ffi.addressof(lib, "VeAFC_I_ChgPackCurr"),
+            ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
+            ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag"),
+            ffi.addressof(lib, "VeAFC_b_ExtremeAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_AbnormalAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EarlyWarningAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EOLFlag"),
+            ffi.addressof(lib, "VeAFC_b_SOCImbalanceFlag"),
+        )
+        lib.fs_API_SelectHTDParameters()
+
+        lib.VeAPI_T_MaxTempSnsr = int(10 * test_cases["Inputs"]["temp"])
+        lib.VeAFC_I_ChgPackCurr = _MAX_CURRENT
+        lib.VeAPI_Pct_PackSOC = int(100 * test_cases["Inputs"]["soc"])
+        print(f"Temp set is: {lib.VeAPI_T_MaxTempSnsr}")
+        print(f"soc set is : {lib.VeAPI_Pct_PackSOC}")
+        # Run Function
+        # ------------------------------------------------
+
+        lib.fs_API_SetInputsAFC(
+            lib.VaAPI_Cmp_NVMRegion,
+            lib.VaAPI_Cmp_NVMLoggingRegion,
+            lib.VeAPI_I_PackCurr,
+            lib.VeAPI_b_PackCurr_DR,
+            lib.VaAPI_U_CellVolts,
+            lib.VaAPI_b_CellVolts_DR,
+            lib.VaAPI_T_TempSnsrs,
+            lib.VaAPI_b_TempSnsrs_DR,
+            lib.VeAPI_T_MinTempSnsr,
+            lib.VeAPI_b_MinTempSnsr_DR,
+            lib.VeAPI_T_MaxTempSnsr,
+            lib.VeAPI_b_MaxTempSnsr_DR,
+            lib.VeAPI_Cap_ChgPackCapcty,
+            lib.VeAPI_b_ChgPackCapcty_DR,
+            lib.VeAPI_Pct_PackSOC,
+            lib.VeAPI_b_PackSOC_DR,
+            lib.VeAPI_b_EVSEChgStatus,
+            ffi.addressof(lib, "VaAFC_Cmp_CTE_Info"),
+            ffi.addressof(lib, "VeAFC_e_ErrorFlags"),
+            ffi.addressof(lib, "VeAFC_I_ChgPackCurr"),
+            ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
+            ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag"),
+            ffi.addressof(lib, "VeAFC_b_ExtremeAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_AbnormalAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EarlyWarningAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EOLFlag"),
+            ffi.addressof(lib, "VeAFC_b_SOCImbalanceFlag"),
+        )
+
+        lib.fs_API_AttemptDerateChgCurr()
+        actual = lib.VeAFC_I_ChgPackCurr
+        expected = test_cases["Inputs"]["output"] * _MAX_CURRENT
+        print(f"ACTUAL : {actual} ")
+        print(f"EXPECTED   : {int(expected)}")
+        # To accommodate minor difference between python and c
+        if abs(int(expected) - actual) == 1:
+            expected = actual
+
+        compare_result(int(expected), actual)
+
+
+    @pytest.mark.parametrize("test_cases", HTD1)
+    def test_AFC_HighTemp_Derate_HTD1(lib: Any, setup_parameters, test_cases):
+        """
+        This test function performs verification of specific operating conditions relevant to the
+        'AFC_HiTemperatureDerate' function.
+        """
+        lib.VeAPI_T_MaxTempSnsr = 250
+
+        lib.fs_API_SetInputsAFC(
+            lib.VaAPI_Cmp_NVMRegion,
+            lib.VaAPI_Cmp_NVMLoggingRegion,
+            lib.VeAPI_I_PackCurr,
+            lib.VeAPI_b_PackCurr_DR,
+            lib.VaAPI_U_CellVolts,
+            lib.VaAPI_b_CellVolts_DR,
+            lib.VaAPI_T_TempSnsrs,
+            lib.VaAPI_b_TempSnsrs_DR,
+            lib.VeAPI_T_MinTempSnsr,
+            lib.VeAPI_b_MinTempSnsr_DR,
+            lib.VeAPI_T_MaxTempSnsr,
+            lib.VeAPI_b_MaxTempSnsr_DR,
+            lib.VeAPI_Cap_ChgPackCapcty,
+            lib.VeAPI_b_ChgPackCapcty_DR,
+            lib.VeAPI_Pct_PackSOC,
+            lib.VeAPI_b_PackSOC_DR,
+            lib.VeAPI_b_EVSEChgStatus,
+            ffi.addressof(lib, "VaAFC_Cmp_CTE_Info"),
+            ffi.addressof(lib, "VeAFC_e_ErrorFlags"),
+            ffi.addressof(lib, "VeAFC_I_ChgPackCurr"),
+            ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
+            ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag"),
+            ffi.addressof(lib, "VeAFC_b_ExtremeAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_AbnormalAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EarlyWarningAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EOLFlag"),
+            ffi.addressof(lib, "VeAFC_b_SOCImbalanceFlag"),
+        )
+        lib.fs_API_SelectHTDParameters()
+
+        lib.VeAPI_T_MaxTempSnsr = int(10 * test_cases["Inputs"]["temp"])
+        lib.VeAFC_I_ChgPackCurr = _MAX_CURRENT
+        lib.VeAPI_Pct_PackSOC = int(100 * test_cases["Inputs"]["soc"])
+        print(f"Temp set is: {lib.VeAPI_T_MaxTempSnsr}")
+        print(f"soc set is : {lib.VeAPI_Pct_PackSOC}")
+        # Run Function
+        # ------------------------------------------------
+
+        lib.fs_API_SetInputsAFC(
+            lib.VaAPI_Cmp_NVMRegion,
+            lib.VaAPI_Cmp_NVMLoggingRegion,
+            lib.VeAPI_I_PackCurr,
+            lib.VeAPI_b_PackCurr_DR,
+            lib.VaAPI_U_CellVolts,
+            lib.VaAPI_b_CellVolts_DR,
+            lib.VaAPI_T_TempSnsrs,
+            lib.VaAPI_b_TempSnsrs_DR,
+            lib.VeAPI_T_MinTempSnsr,
+            lib.VeAPI_b_MinTempSnsr_DR,
+            lib.VeAPI_T_MaxTempSnsr,
+            lib.VeAPI_b_MaxTempSnsr_DR,
+            lib.VeAPI_Cap_ChgPackCapcty,
+            lib.VeAPI_b_ChgPackCapcty_DR,
+            lib.VeAPI_Pct_PackSOC,
+            lib.VeAPI_b_PackSOC_DR,
+            lib.VeAPI_b_EVSEChgStatus,
+            ffi.addressof(lib, "VaAFC_Cmp_CTE_Info"),
+            ffi.addressof(lib, "VeAFC_e_ErrorFlags"),
+            ffi.addressof(lib, "VeAFC_I_ChgPackCurr"),
+            ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
+            ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag"),
+            ffi.addressof(lib, "VeAFC_b_ExtremeAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_AbnormalAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EarlyWarningAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EOLFlag"),
+            ffi.addressof(lib, "VeAFC_b_SOCImbalanceFlag"),
+        )
+        lib.fs_API_AttemptDerateChgCurr()
+        actual = lib.VeAFC_I_ChgPackCurr
+        expected = test_cases["Inputs"]["output"]*_MAX_CURRENT
+        print(f"ACTUAL : {actual} ")
+        print(f"EXPECTED   : {int(expected)}")
+        # To accommodate minor difference between python and c
+        if abs(int(expected) - actual) == 1:
+            expected = actual
+
+        compare_result(int(expected), actual)
+
+
+    @pytest.mark.parametrize("test_cases", HTD2)
+    def test_AFC_HighTemp_Derate_HTD2(lib: Any, setup_parameters, test_cases):
+        """
+        This test function performs verification of specific operating conditions relevant to the
+        'AFC_HiTemperatureDerate' function.
+        """
+        lib.VeAPI_T_MaxTempSnsr = 271
+
+        lib.fs_API_SetInputsAFC(
+            lib.VaAPI_Cmp_NVMRegion,
+            lib.VaAPI_Cmp_NVMLoggingRegion,
+            lib.VeAPI_I_PackCurr,
+            lib.VeAPI_b_PackCurr_DR,
+            lib.VaAPI_U_CellVolts,
+            lib.VaAPI_b_CellVolts_DR,
+            lib.VaAPI_T_TempSnsrs,
+            lib.VaAPI_b_TempSnsrs_DR,
+            lib.VeAPI_T_MinTempSnsr,
+            lib.VeAPI_b_MinTempSnsr_DR,
+            lib.VeAPI_T_MaxTempSnsr,
+            lib.VeAPI_b_MaxTempSnsr_DR,
+            lib.VeAPI_Cap_ChgPackCapcty,
+            lib.VeAPI_b_ChgPackCapcty_DR,
+            lib.VeAPI_Pct_PackSOC,
+            lib.VeAPI_b_PackSOC_DR,
+            lib.VeAPI_b_EVSEChgStatus,
+            ffi.addressof(lib, "VaAFC_Cmp_CTE_Info"),
+            ffi.addressof(lib, "VeAFC_e_ErrorFlags"),
+            ffi.addressof(lib, "VeAFC_I_ChgPackCurr"),
+            ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
+            ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag"),
+            ffi.addressof(lib, "VeAFC_b_ExtremeAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_AbnormalAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EarlyWarningAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EOLFlag"),
+            ffi.addressof(lib, "VeAFC_b_SOCImbalanceFlag"),
+        )
+        lib.fs_API_SelectHTDParameters()
+
+        lib.VeAPI_T_MaxTempSnsr = int(10 * test_cases["Inputs"]["temp"])
+        lib.VeAFC_I_ChgPackCurr = _MAX_CURRENT
+        lib.VeAPI_Pct_PackSOC = int(100 * test_cases["Inputs"]["soc"])
+        print(f"Temp set is: {lib.VeAPI_T_MaxTempSnsr}")
+        print(f"soc set is : {lib.VeAPI_Pct_PackSOC}")
+        # Run Function
+        # ------------------------------------------------
+
+        lib.fs_API_SetInputsAFC(
+            lib.VaAPI_Cmp_NVMRegion,
+            lib.VaAPI_Cmp_NVMLoggingRegion,
+            lib.VeAPI_I_PackCurr,
+            lib.VeAPI_b_PackCurr_DR,
+            lib.VaAPI_U_CellVolts,
+            lib.VaAPI_b_CellVolts_DR,
+            lib.VaAPI_T_TempSnsrs,
+            lib.VaAPI_b_TempSnsrs_DR,
+            lib.VeAPI_T_MinTempSnsr,
+            lib.VeAPI_b_MinTempSnsr_DR,
+            lib.VeAPI_T_MaxTempSnsr,
+            lib.VeAPI_b_MaxTempSnsr_DR,
+            lib.VeAPI_Cap_ChgPackCapcty,
+            lib.VeAPI_b_ChgPackCapcty_DR,
+            lib.VeAPI_Pct_PackSOC,
+            lib.VeAPI_b_PackSOC_DR,
+            lib.VeAPI_b_EVSEChgStatus,
+            ffi.addressof(lib, "VaAFC_Cmp_CTE_Info"),
+            ffi.addressof(lib, "VeAFC_e_ErrorFlags"),
+            ffi.addressof(lib, "VeAFC_I_ChgPackCurr"),
+            ffi.addressof(lib, "VeAFC_U_ChgPackVolt"),
+            ffi.addressof(lib, "VeAFC_b_ChgCompletionFlag"),
+            ffi.addressof(lib, "VeAFC_b_ExtremeAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_AbnormalAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EarlyWarningAgingFlag"),
+            ffi.addressof(lib, "VeAFC_b_EOLFlag"),
+            ffi.addressof(lib, "VeAFC_b_SOCImbalanceFlag"),
+        )
+
+        lib.fs_API_AttemptDerateChgCurr()
+        actual = lib.VeAFC_I_ChgPackCurr
+        expected = test_cases["Inputs"]["output"]*_MAX_CURRENT
+        print(f"ACTUAL : {actual} ")
+        print(f"EXPECTED   : {int(expected)}")
+        # To accommodate minor difference between python and c
+        if abs(int(expected) - actual) == 1:
+            expected = actual
+
+        compare_result(int(expected), actual)
