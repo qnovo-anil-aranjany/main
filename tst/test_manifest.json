@@ -1,0 +1,45 @@
+
+{
+    "test_details":
+      {
+        "test_type": "ctest",
+        "module": "swc_fast_charge",
+        "customer": "HMC",
+        "program": "1",
+        "tests": [
+          "test_AFC_ChargeCycles_tracking.py",
+          "test_AFC_LogCheck_EOL_status.py",
+           "test_AFC_AttemptIncrementCPVIdx.py",
+          "test_AFC_CalcTemperatureRatio.py",
+          "test_AFC_CheckChgCompletion.py",
+          "test_AFC_CheckExceedChgCurrRange.py",
+          "test_AFC_ChgCurrPresentStage.py",
+          "test_AFC_ColdTempCompensation.py",
+          "test_AFC_CompensatedVoltage.py",
+          "test_AFC_HighTempDerate.py",
+          "test_AFC_HighestCPVStageIdx.py",
+          "test_AFC_MainInit.py",
+          "test_AFC_MainPrdc.py",
+          "test_AFC_SOCtoOCV.py",
+          "test_AFC_SetupStageParam.py",
+          "test_AFC_Version.py",
+          "test_Interpolation_Match.py",
+          "test_LIB_LogObfuscation.py",
+          "test_AFC_CPVTrack.py",
+          "test_LIB_LogData.py",
+          "test_AFC_SetNewMaxProtocolCurr.py",
+          "test_AFC_Calc_TlowI.py",
+          "test_AFC_Calc_TmaxI.py",
+          "test_AFC_LogCorrIdxEvent.py",
+          "test_AFC_SOC_Imbalance.py",
+          "test_AFC_LogCorridx_Aging.py",
+          "test_AFC_nvm_reset.py",
+          "test_AFC_tuning.py",
+          "test_AFC_VoltageImbalance_Accumulate.py",
+          "test_AFC_VoltageImbalance_Analysis.py",
+          "test_AFC_time_based.py",
+          "test_AFC_logging_HMC_time_based.py",
+          "test_AFC_tuning_HMC_time_based.py"        ]
+        }
+
+}
