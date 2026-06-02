@@ -2,7 +2,7 @@ from testrail_api import TestRailAPI
 
 client = "https://qnovocorp.testrail.io"
 client_user = "aaranjany@qnovocorp.com"
-client_password = "wXuRu9rVqDcm.Evd7bf0-M94eamebBrsZZ/Z07zeb"
+client_password = ""
 
 
 
